@@ -1,0 +1,67 @@
+------------------------------------------------------------------
+-- MongoDB
+------------------------------------------------------------------
+
+------------------------------------------------------------------
+--- Installation
+-----------------------------------------------------------------=
+
+
+Table => Collection
+Record => Document
+Column => Field
+-----------------------------------------------------------------
+-- Create and Drop Collection
+-----------------------------------------------------------------
+db.createCollection("userCollection");
+
+show collections;
+
+db.userCollection.insert({"name":"Ram Limbu"});
+
+db.userCollection.drop();
+
+----------------------------------------------------------------
+-- Insert Documents
+----------------------------------------------------------------
+
+use school;
+
+db.students.insert(
+	{
+		"StudentID": "1",
+		"FirstName": "Larry",
+		"LastName": "Page",
+		"Age": "40"
+	}
+);
+
+
+db.students.insert(
+	{
+		"StudentID": "2",
+		"FirstName": "Sundar",
+		"LastName": "Pechai",
+		"Age": "42"
+	},
+	{
+		"StudentID": "3",
+		"FirstName": "Mark",
+		"LastName": "Zukerburg",
+		"Age": "35"
+	}	
+);
+
+------------------------------------------------------------------
+-- Query Document
+------------------------------------------------------------------
+use school;
+db.students.find();
+db.students.find().pretty();
+db.students.findOne();
+db.students.find({"StudentID": "1"}) -- Find student with StudentID="1"
+db.students.find({"Age": {$gt:"20"}); -- Find student with Age > 20
+db.students.find({"Age": {$lt:"20"}); -- Find student with Age < 20
+db.students.find({"Age": {$lte:"20"}); -- Find student with Age <= 20
+db.students.find({"Age": {$ne:"20"}); -- Find student with Age != 20
+
