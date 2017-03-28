@@ -1,6 +1,23 @@
 --------------------------------------------------------------------------------
 --- Examples of Grouping functions - GROUP BY, ROLLUP and CUBE
 --------------------------------------------------------------------------------
+/*
+
+Grouping Data:
+
+-- Aggregate Functions
+-- Grouping Multiple Columns
+-- HAVING Clause
+-- ROLLUP Operations
+-- Partial ROLLUP
+-- CUBE Operations
+-- GROUPING Function
+-- GROUPING SETS
+-- Cross-Tabulation Queries
+-- PIVOT Operation
+-- UNPIVOT Operation
+
+*/ 
 
 DROP TABLE dimension_tab;
 
@@ -359,3 +376,260 @@ ORDER BY GROUPING_ID,fact_1_id,fact_2_id,fact_3_id, fact_4_id;
 
 
 
+
+
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- PIVOT and UNPIVOT quiries in 11g
+--------------------------------------------------------------------------------
+
+ -- Create Example data
+CREATE TABLE employees(job VARCHAR2(50), dept_no NUMBER, sal NUMBER(10,2));
+
+
+INSERT INTO employees VALUES('ANALYST',20,6600);
+INSERT INTO employees VALUES('CLERK',10,1430);
+INSERT INTO employees VALUES('CLERK',20,2090);
+INSERT INTO employees VALUES('CLERK',30,1045);
+INSERT INTO employees VALUES('MANAGER',10,2695);
+INSERT INTO employees VALUES('MANAGER',20,3272.5);
+INSERT INTO employees VALUES('MANAGER',30,3135);
+INSERT INTO employees VALUES('PRESEDINT',10,5500);
+INSERT INTO employees VALUES('SALESMAN',30,6160);
+
+COMMIT;
+
+--------------------------------------------------------------------------------
+
+SELECT job, dept_no, Sum(sal) sum_sal
+FROM employees
+GROUP BY job, dept_no
+ORDER BY job, dept_no;
+
+
+
+WITH pivot_data AS
+(
+    SELECT dept_no,job, sal
+    FROM employees
+
+)
+SELECT * FROM pivot_data
+PIVOT
+(
+	Sum(sal)  		--<-- pivot_clause
+	FOR dept_no		--<-- pivot_for_clause
+	IN (10,20,30)	--<-- pivot_in_clause
+
+);
+
+
+
+WITH pivot_data AS
+(
+    SELECT dept_no,job, sal
+    FROM employees
+
+)
+SELECT * FROM pivot_data
+PIVOT
+(
+	Sum(sal)  		--<-- pivot_clause
+	FOR dept_no		--<-- pivot_for_clause
+	IN (10,20,30,40)	--<-- pivot_in_clause
+
+)
+WHERE  JOB IN ('ANALYST','CLERK','SALESMAN');
+
+-- Using inline-view
+SELECT *
+FROM
+(
+	SELECT dept_no, job, sal FROM employees
+)
+pivot ( Sum(sal) FOR dept_no IN ('10','20','30'));
+
+
+--------------------------------------------------------------------------------
+-- Aliasing pivot column
+
+SELECT  *
+FROM employees
+pivot
+(
+
+-- alias both pivot_clause and pivot_in_clause
+	--Sum(sal) AS salaries
+	Sum(sal)
+--	FOR dept_no IN (
+--						10 AS d10_sal,
+--						20 AS d20_sal,
+--						30 AS d30_sal,
+--						40 AS d40_sal
+--					)
+
+-- alias pivot_in_claus
+--	FOR dept_no IN (10 AS d10_sal, 20 d20_sal, 30 d30_sal, 40 AS d40_sal)
+
+-- selective alias
+FOR dept_no IN (10 AS d10_sal, 20, 30 d30_sal, 40)
+
+);
+
+
+--------------------------------------------------------------------------------
+-- pivoting multiple columns
+
+SELECT *
+FROM employees
+PIVOT
+(
+	Sum(sal) AS Sum,
+ 	Count(sal) AS cnt
+	--FOR dept_no IN (10 AS d10_sal, 20 AS d20_sal, 30 AS d30_sal, 40 AS d40_sal)
+
+-- extend pivot_for_clause and pivot_in_clause to include JOB valuees in the filter
+	FOR (dept_no, job) IN  (
+								(30, 'SALESMAN') AS d30_sls,
+								(30, 'MANAGER') AS d30_mgr,
+								(30, 'CLERK') AS d30_clk
+							)
+
+);
+
+
+-- general restrictions
+
+-- 1. cannot project the column(s) used  in the pivot_for_clause
+SELECT dept_no
+FROM employees
+pivot ( Sum(sal)
+FOR dept_no IN (10,20,30));
+
+-- ORA-00904: "DEPT_NO": invalid identifier
+
+-- 2. Cannot include any column(s) used in pivot_clause
+SELECT sal
+FROM employees
+pivot ( Sum(sal)
+FOR dept_no IN (10,20,30));
+
+-- ORA-00904: "SAL": invalid identifier
+
+--3. Raises exception, if we attempt to project the SAL column
+SELECT *
+FROM employees
+pivot (sal
+FOR dept_no IN (10,20,30));
+
+
+--------------------------------------------------------------------------------
+-- Explain Plan
+
+EXPLAIN PLAN FOR
+SELECT *
+FROM employees
+pivot (Sum(sal)
+FOR dept_no IN (10,20,30));
+
+
+SELECT * FROM TABLE(dbms_xplan.display);
+
+
+
+PLAN_TABLE_OUTPUT
+Plan hash value: 2432923890
+
+---------------------------------------------------------------------------------
+| Id  | Operation           | Name      | Rows  | Bytes | Cost (%CPU)| Time     |
+---------------------------------------------------------------------------------
+|   0 | SELECT STATEMENT    |           |     9 |   477 |     3  (34)| 00:00:01 |
+|   1 |  HASH GROUP BY PIVOT|           |     9 |   477 |     3  (34)| 00:00:01 |
+|   2 |   TABLE ACCESS FULL | EMPLOYEES |     9 |   477 |     2   (0)| 00:00:01 |
+---------------------------------------------------------------------------------
+
+Note
+-----
+   - dynamic sampling used for this statement (level=2)
+
+--------------------------------------------------------------------------------
+
+
+--------------------------------------------------------------------------------
+-- Pivoting an unknown domain of values
+
+SELECT *
+FROM employees
+pivot XML (Sum(sal) FOR dept_no IN (ANY));
+
+
+--------------------------------------------------------------------------------
+-- UNPIVOT
+--------------------------------------------------------------------------------
+
+-- SYNTAX:
+SELECT ....
+FROM ...
+UNPIVOT [INCLUDE|EXCLUDE NULLS]
+(
+	unpivot_clause
+	unpivot_for_clause
+	unpivot_in_clause
+)
+WHERE ....;
+
+
+--- Unpivot Examples
+
+CREATE OR REPLACE VIEW pivot_data_vw
+AS
+SELECT *
+FROM employees
+pivot(Sum(sal)
+FOR dept_no IN (10 AS d10_sal, 20 AS d20_sal, 30 AS d30_sal, 40 AS d40_sal));
+
+
+SELECT * FROM  pivot_data_vw;
+
+
+--- Unpivot dataset
+SELECT *
+FROM pivot_data_vw
+UNPIVOT
+(
+	dept_sal
+	FOR sal_desc
+	IN (d10_sal, d20_sal, d30_sal, d40_sal)
+);
+
+
+-- Handling NULL data
+SELECT *
+FROM pivot_data_vw
+UNPIVOT	INCLUDE NULLS
+(
+  dept_sal
+  FOR sal_desc
+  IN (d10_sal, d20_sal, d30_sal, d40_sal)
+);
+
+
+-- Unpivot aliasing option
+
+SELECT job, sal_desc, dept_sal
+FROM pivot_data_vw
+unpivot (dept_sal
+FOR sal_desc IN (
+					d10_sal AS 'SAL TOTAL FOR 10',
+					d20_sal AS 'SAL TOTAL FOR 20',
+					d30_sal AS 'SAL TOTAL FOR 30',
+					d40_sal AS 'SAL TOTAL FOR 40'));
+
+
+
+
+
+-- General restriction
+
+-- 1. Coluns in the pivot_in_clause must be all of the same datatype
+-- 2. Datatype conversions within the unpivot_in_clause is also invalid.
